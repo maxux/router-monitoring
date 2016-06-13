@@ -122,10 +122,10 @@ class WirelessMonitor():
 		idle = float(client["inactive time"].split(' ')[0])
 		
 		if idle > 120000:
-			color = c.blue
+			color = c.yellow
 		
 		elif idle > 45000:
-			color = c.yellow
+			color = c.blue
 		
 		elif client["authorized"]:
 			color = c.green
@@ -176,7 +176,7 @@ class WirelessMonitor():
 			sys.stdout.write(self._colorizeSignal(client))
 			
 			# end of line
-			sys.stdout.write("\033\n")
+			sys.stdout.write("\033K\n")
 			index += 1
 			
 			if index == int(self.rows) - 1:
