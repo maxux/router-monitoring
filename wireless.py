@@ -15,18 +15,18 @@ class Colors():
 		self.clear  = '\033[0m'
 
 class WirelessMonitor():
-	def __init__(self, interface="wlan0"):
-		self.interface = interface
+	def __init__(self, interfaces=["wlan0"]):
+		self.interfaces = interfaces
 		self.clients = {}
 		self.colors = Colors()
 	
 	"""
 	Source
 	"""
-	def readSource(self):
+	def readSource(self, interface):
 		output = []
 
-		proc = subprocess.Popen(['iw', 'dev', self.interface, 'station', 'dump'], stdout=subprocess.PIPE)
+		proc = subprocess.Popen(['iw', 'dev', interface, 'station', 'dump'], stdout=subprocess.PIPE)
 		for input in proc.stdout:
 			output.append(input.decode('utf-8').rstrip())
 		
@@ -60,10 +60,8 @@ class WirelessMonitor():
 			else:
 				self.clients[bssid]["ip"] = None
 		
-	def update(self):
-		self.clients = {}
-		
-		source = self.readSource()
+	def _update(self, interface):
+		source = self.readSource(interface)
 		current = {}
 		
 		for line in source:
@@ -75,7 +73,11 @@ class WirelessMonitor():
 			if line.startswith("Station"):
 				words = line.split(" ")
 				
-				self.clients[words[1]] = {"bssid": words[1]}
+				self.clients[words[1]] = {
+					"bssid": words[1],
+					"interface": interface
+				}
+				
 				current = self.clients[words[1]]
 				continue
 			
@@ -85,6 +87,12 @@ class WirelessMonitor():
 		# grabbing ip address from arp cache
 		if len(self.clients) > 0:
 			self.setAddresses()
+	
+	def update(self):
+		self.clients = {}
+		
+		for intf in self.interfaces:
+			self._update(intf)
 
 	"""
 	Formatter
@@ -104,18 +112,21 @@ class WirelessMonitor():
 	
 	def _colorizeSignal(self, client):
 		c = self.colors
-		sig = float(client["signal"].split(' ')[0])
+		tmp = client["signal"].split(' ')
+		sig = float(tmp[0])
+		
+		fmt = "%s %s%s" % (tmp[0], tmp[-1], c.clear)
 		
 		if sig < -80:
-			return c.red + client["signal"] + c.clear
+			return c.red + fmt
 		
 		if sig < -70:
-			return c.yellow + client["signal"] + c.clear
+			return c.yellow + fmt
 		
 		if sig < -55:
-			return c.blue + client["signal"] + c.clear
+			return c.blue + fmt
 		
-		return c.green + client["signal"] + c.clear
+		return c.green + fmt
 		
 	def _colorizeStation(self, client):
 		c = self.colors
@@ -188,7 +199,7 @@ class WirelessMonitor():
 			sys.stdout.write("\033[K\n")
 			index += 1
 
-wlz = WirelessMonitor()
+wlz = WirelessMonitor(["wlan0", "wlan1"])
 wlz.initialize()
 
 runid = 0
