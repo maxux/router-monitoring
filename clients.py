@@ -1,4 +1,5 @@
 import subprocess
+import operator
 import sys
 import time
 import os
@@ -25,6 +26,9 @@ class Monitoring():
 		sys.stdout.write("\033[2J\033[H")
 		sys.stdout.write("\033[?25l")
 		self.rows, self.columns = os.popen('stty size', 'r').read().split()
+		
+		self.rows = int(self.rows)
+		self.columns = int(self.columns)
 	
 	def new(self):
 		# new run
@@ -307,7 +311,7 @@ class DHCPMonitor():
 	"""
 	def _colorizeState(self, client):
 		c = self.colors
-		color = c.green if client['state'] == "active" else c.red		
+		color = c.green if client['state'] == "active" else c.red
 
 		return color + client["state"] + c.clear
 	
@@ -319,7 +323,7 @@ class DHCPMonitor():
 		print("------------------+-----------------+-----------+----------------------")
 		
 		self.console.index += 2
-		for client in self.clients:
+		for client in sorted(self.clients, key = lambda c: self.clients[c]['state']):
 			host = client
 			client = self.clients[client]
 			
@@ -340,6 +344,9 @@ class DHCPMonitor():
 			# end of line
 			sys.stdout.write("\033K\n")
 			self.console.index += 1
+
+			if self.console.index >= self.console.rows - 1:
+				break
 
 monitor = Monitoring()
 monitor.initialize()
