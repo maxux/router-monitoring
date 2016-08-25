@@ -327,6 +327,9 @@ class DHCPMonitor():
 			host = client
 			client = self.clients[client]
 			
+			if client['state'] == 'inactive':
+				break
+			
 			# sys.stdout.write(self._colorizeStation(client))
 			sys.stdout.write(client['hardware'])
 			sys.stdout.write(" | ")
@@ -348,11 +351,56 @@ class DHCPMonitor():
 			if self.console.index >= self.console.rows - 1:
 				break
 
+class ConntrackMonitor():
+	def __init__(self, console):
+		self.console = console
+		# self.colors = Colors()
+		self._value = 0
+		self._peak = 0
+	
+	"""
+	Source
+	"""
+	def readSource(self):
+		leases = {}
+		
+		with open("/proc/sys/net/netfilter/nf_conntrack_count", 'r') as content:
+			full = content.read()
+		
+		return int(full)
+	
+	def update(self):
+		self._value = self.readSource()
+		
+		if self._value > self._peak:
+			self._peak = self._value
+	
+	"""
+	Displayer
+	"""	
+	def refresh(self):
+		print(" Tracking         | Count           | Peak")
+		print("------------------+-----------------+-----------------------------------")
+		
+		self.console.index += 2
+		sys.stdout.write("Connections      ")
+		sys.stdout.write(" | ")
+		sys.stdout.write("%-15d" % self._value)
+		sys.stdout.write(" | ")
+		sys.stdout.write("%d" % self._peak)
+			
+		sys.stdout.write("\033K\n")
+		self.console.index += 1
+
+		if self.console.index >= self.console.rows - 1:
+			return
+
 monitor = Monitoring()
 monitor.initialize()
 
 dhcp = DHCPMonitor(monitor)
-wlz = WirelessMonitor(monitor, ["wlan0", "wlan1"])
+wlz  = WirelessMonitor(monitor, ["wlan0", "wlan1"])
+conn = ConntrackMonitor(monitor)
 
 runid = 0
 
@@ -365,10 +413,13 @@ while True:
 
 		wlz.update()
 		dhcp.update()
+		conn.update()
 		
 		wlz.refresh()
 		monitor.separe()
 		dhcp.refresh()
+		monitor.separe()
+		conn.refresh()
 	
 		time.sleep(1)
 
