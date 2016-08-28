@@ -351,10 +351,10 @@ class DHCPMonitor():
 			if self.console.index >= self.console.rows - 1:
 				break
 
-class ConntrackMonitor():
+class ConntrackCountMonitor():
 	def __init__(self, console):
 		self.console = console
-		# self.colors = Colors()
+		self.colors = Colors()
 		self._value = 0
 		self._peak = 0
 	
@@ -362,8 +362,6 @@ class ConntrackMonitor():
 	Source
 	"""
 	def readSource(self):
-		leases = {}
-		
 		with open("/proc/sys/net/netfilter/nf_conntrack_count", 'r') as content:
 			full = content.read()
 		
@@ -382,10 +380,21 @@ class ConntrackMonitor():
 		print(" Tracking         | Count           | Peak")
 		print("------------------+-----------------+-----------------------------------")
 		
+		color = self.colors.green
+		
+		if self._value > 1000:
+			color = self.colors.red
+		
+		elif self._value > 500:
+			color = self.colors.yellow
+		
+		elif self._value > 200:
+			color = self.colors.blue
+		
 		self.console.index += 2
 		sys.stdout.write("Connections      ")
 		sys.stdout.write(" | ")
-		sys.stdout.write("%-15d" % self._value)
+		sys.stdout.write("%s%-15d%s" % (color, self._value, self.colors.clear))
 		sys.stdout.write(" | ")
 		sys.stdout.write("%d" % self._peak)
 			
@@ -395,12 +404,87 @@ class ConntrackMonitor():
 		if self.console.index >= self.console.rows - 1:
 			return
 
+class ConntrackListMonitor():
+	def __init__(self, console):
+		self.console = console
+		self.colors = Colors()
+		self.connections = {}
+	
+	"""
+	Source
+	"""
+	def readSource(self):
+		output = []
+
+		proc = subprocess.Popen(
+			['conntrack', '-L', '-p', 'tcp', '--state', 'ESTABLISHED'],
+			stdout=subprocess.PIPE,
+			stderr=subprocess.PIPE
+		)
+
+		for input in proc.stdout:
+			output.append(input.decode('utf-8').rstrip().split(' '))
+		
+		return output
+	
+	def update(self):
+		temp = self.readSource()
+		self.connections = {}
+		
+		for conn in temp:
+			src = conn[9].partition('=')[2]
+			dst = conn[10].partition('=')[2]
+			
+			if not self.connections.get(src):
+				self.connections[src] = {}
+			
+			if not self.connections[src].get(dst):
+				self.connections[src][dst] = 0
+				
+			self.connections[src][dst] += 1
+
+	
+	"""
+	Displayer
+	"""	
+	def refresh(self):
+		print(" Source           | Destination     | Count")
+		print("------------------+-----------------+-----------------------------------")
+		
+		self.console.index += 2
+		previous = ""
+		
+		for src in self.connections:
+			for dst in self.connections[src]:
+				count = self.connections[src][dst]
+				color = self.colors.clear if count == 1 else self.colors.yellow
+				
+				dsrc = src
+
+				if src == previous:
+					dsrc = "..."
+				
+				previous = src
+
+				sys.stdout.write("%-17s" % dsrc)
+				sys.stdout.write(" | ")
+				sys.stdout.write("%-15s" % dst)
+				sys.stdout.write(" | ")
+				sys.stdout.write("%s%d%s" % (color, count, self.colors.clear))
+				
+				sys.stdout.write("\033K\n")
+				self.console.index += 1
+
+				if self.console.index >= self.console.rows - 1:
+					return
+
 monitor = Monitoring()
 monitor.initialize()
 
 dhcp = DHCPMonitor(monitor)
 wlz  = WirelessMonitor(monitor, ["wlan0", "wlan1"])
-conn = ConntrackMonitor(monitor)
+conn = ConntrackCountMonitor(monitor)
+tcp  = ConntrackListMonitor(monitor)
 
 runid = 0
 
@@ -414,12 +498,15 @@ while True:
 		wlz.update()
 		dhcp.update()
 		conn.update()
+		tcp.update()
 		
 		wlz.refresh()
 		monitor.separe()
 		dhcp.refresh()
 		monitor.separe()
 		conn.refresh()
+		monitor.separe()
+		tcp.refresh()
 	
 		time.sleep(1)
 
