@@ -72,7 +72,7 @@ class WirelessMonitor():
 	def readArp(self):
 		output = []
 
-		proc = subprocess.Popen(['ip', 'n'], stdout=subprocess.PIPE)
+		proc = subprocess.Popen(['ip', '-4', 'n'], stdout=subprocess.PIPE)
 		for input in proc.stdout:
 			output.append(input.decode('utf-8').rstrip())
 		
